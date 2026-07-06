@@ -5,11 +5,13 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "categorizar": "node src/categorizar.js"
   },
   "license": "ISC",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.0",
+    "@anthropic-ai/sdk": "^0.110.0",
+    "@google/genai": "^2.10.0",
     "dotenv": "^16.4.5"
   }
 }
