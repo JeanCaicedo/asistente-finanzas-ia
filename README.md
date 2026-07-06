@@ -1,34 +1,42 @@
 # Asistente de Finanzas IA
 
-Agente de IA que responde preguntas en lenguaje natural sobre finanzas personales: gastos, categorías, comparativas entre meses, y (más adelante) lectura de recibos por foto.
+Agente de IA que responde preguntas en lenguaje natural sobre finanzas personales: consulta de gastos, categorización automática y comparativas entre periodos, con soporte planificado para extracción de datos desde imágenes de recibos.
 
-## Por qué este proyecto
+## Descripción
 
-Proyecto de aprendizaje enfocado en ingeniería de agentes de IA (LLMs con function-calling/tool-use y RAG), construido paso a paso siguiendo un roadmap concreto en vez de un tutorial genérico de "chat con tu PDF".
+Proyecto orientado a la implementación de agentes de IA basados en LLMs, integrando técnicas de function-calling / tool-use y RAG (Retrieval-Augmented Generation) para conectar un modelo de lenguaje con datos financieros reales.
 
-## Estado actual
+## Estado del proyecto
 
-🟡 **Paso 1 del roadmap**: llamada básica a la API de Anthropic, sin tools ni base de datos todavía. Sirve para verificar que la integración funciona y entender la forma de la respuesta (`content`, `usage`) antes de construir el agente completo.
+🟡 En desarrollo — Fase 1: integración básica con la API de Anthropic (envío de prompts, configuración de `system prompt` y verificación del formato de respuesta y consumo de tokens).
 
 ## Roadmap
 
-- [x] 1. Llamada básica a la API (system prompt, mensajes, tokens)
-- [ ] 2. Prompting estructurado (respuestas en JSON con formato fijo)
-- [ ] 3. Function calling: el agente consulta una base de datos real de gastos
-- [ ] 4. RAG con `pgvector` para preguntas sobre historial largo
-- [ ] 5. Arquitectura de agente completa (loop de tool-use)
-- [ ] 6. Seguridad y control de costos en producción
+- [x] Integración básica con la API (system prompt, mensajes, tokens)
+- [ ] Prompting estructurado con salida en formato JSON
+- [ ] Function calling: consultas a una base de datos de gastos
+- [ ] RAG con `pgvector` para consultas sobre historial extenso
+- [ ] Arquitectura de agente con ciclo de tool-use
+- [ ] Consideraciones de seguridad y control de costos en producción
 
-## Cómo correrlo
+## Stack tecnológico
+
+- Node.js
+- Anthropic SDK (`@anthropic-ai/sdk`)
+- Planificado: Express/NestJS, PostgreSQL + `pgvector`
+
+## Instalación
 
 ```bash
 npm install
-cp .env.example .env   # agrega tu ANTHROPIC_API_KEY (gratis en console.anthropic.com)
-npm start                              # pregunta por defecto
-npm start -- "¿cuánto gasté en enero?" # pregunta propia
+cp .env.example .env
 ```
 
-## Stack
+Configurar la variable `ANTHROPIC_API_KEY` en `.env` (clave disponible en [console.anthropic.com](https://console.anthropic.com)).
 
-- Node.js + `@anthropic-ai/sdk`
-- Próximamente: Express/NestJS para la API, PostgreSQL + `pgvector` para el historial de gastos
+## Uso
+
+```bash
+npm start
+npm start -- "¿Cuánto gasté en enero?"
+```
