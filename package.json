@@ -1,0 +1,15 @@
+{
+  "name": "asistente-finanzas-ia",
+  "version": "0.1.0",
+  "description": "Agente de IA que responde preguntas en lenguaje natural sobre finanzas personales, usando la API de Anthropic",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "dotenv": "^16.4.5"
+  }
+}
