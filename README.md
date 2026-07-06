@@ -8,7 +8,7 @@ Proyecto orientado a la implementación de agentes de IA basados en LLMs, integr
 
 ## Estado del proyecto
 
-🟡 En desarrollo — Fase 1: integración básica con la API de Anthropic (envío de prompts, configuración de `system prompt` y verificación del formato de respuesta y consumo de tokens).
+En desarrollo — Fase 1: integración básica con la API de Anthropic (envío de prompts, configuración de `system prompt` y verificación del formato de respuesta y consumo de tokens).
 
 ## Roadmap
 
