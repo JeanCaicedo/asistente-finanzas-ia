@@ -89,22 +89,49 @@ export const ESQUEMA = {
   ],
 };
 
-const SYSTEM = `Eres un motor de categorización de transacciones financieras personales.
+// El system prompt se construye por llamada porque incluye la fecha de hoy: los
+// extractos bancarios traen "3 de marzo" sin año, y sin una referencia temporal
+// el modelo inventa uno. Dársela convierte una alucinación en una inferencia
+// acotada, que además obligamos a declarar bajando 'confianza'.
+function construirSystem(hoy) {
+  return `Eres un motor de categorización de transacciones financieras personales.
 Recibes una descripción en lenguaje natural y devuelves los datos estructurados.
+La fecha de hoy es ${hoy}.
 Reglas:
 - 'monto' siempre positivo; el signo lo indica 'tipo' (gasto o ingreso).
 - Elige la 'categoria' del enum que mejor represente el gasto/ingreso.
 - Si el texto es ambiguo, usa 'confianza': "baja" y explícalo en 'nota'.
-- No inventes fechas ni comercios: si no están, usa null / 'Desconocido'.`;
+- No inventes comercios: si no está, usa 'Desconocido'.
+- Fechas:
+  · Si el texto no menciona ninguna fecha, 'fecha' es null.
+  · Si trae día, mes y año, úsalos tal cual.
+  · Si trae día y mes pero NO año, asume el año que haga la fecha más reciente
+    sin quedar en el futuro respecto de hoy. Ese año es una suposición tuya, no
+    un dato: baja 'confianza' a "media" como máximo y di en 'nota' que
+    infieriste el año.`;
+}
+
+/**
+ * Fecha de hoy en formato AAAA-MM-DD, en hora local.
+ * toISOString() daría UTC y adelantaría el día en zonas al oeste de Greenwich.
+ */
+function fechaDeHoy() {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
 
 /**
  * Categoriza una transacción descrita en texto libre.
  * @param {string} descripcion - p.ej. "Rappi restaurante 45.000 el 3 de marzo"
+ * @param {object} [opts]
+ * @param {string} [opts.hoy] - fecha de referencia AAAA-MM-DD (para tests)
  * @returns {Promise<{datos: object, usage: object, modelo: string}>}
  */
-export async function categorizarTransaccion(descripcion) {
+export async function categorizarTransaccion(descripcion, { hoy } = {}) {
   return generarJSON({
-    system: SYSTEM,
+    system: construirSystem(hoy || fechaDeHoy()),
     prompt: descripcion,
     schema: ESQUEMA,
     maxTokens: 400,
