@@ -1,0 +1,509 @@
+openapi: 3.0.3
+info:
+  title: Asistente de Finanzas IA — API (Demo)
+  version: 1.0.0
+  description: >
+    API REST de la demo de finanzas personales de un solo usuario (sin autenticación).
+    Todos los montos se expresan como enteros en unidades menores (céntimos) en el campo
+    `*_minor`, acompañados de `currency`. El frontend nunca realiza aritmética de dinero:
+    consume cifras ya calculadas por el backend. Los errores nunca incluyen montos ni
+    descripciones sensibles.
+servers:
+  - url: http://localhost:8000
+    description: Backend local (FastAPI)
+
+paths:
+  # ---------------- Transacciones ----------------
+  /transactions:
+    get:
+      summary: Listar/filtrar transacciones
+      parameters:
+        - { in: query, name: year_month, schema: { type: string, example: "2026-07" } }
+        - { in: query, name: category_id, schema: { type: integer } }
+        - { in: query, name: type, schema: { type: string, enum: [income, expense] } }
+      responses:
+        "200":
+          description: Lista de transacciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Transaction" }
+    post:
+      summary: Crear transacción manual (con sugerencia de categoría de la IA)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransactionCreate" }
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /transactions/{id}:
+    patch:
+      summary: Editar transacción (incluye corregir la categoría)
+      parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransactionUpdate" }
+      responses:
+        "200":
+          description: Actualizada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      summary: Eliminar transacción
+      parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
+      responses:
+        "204": { description: Eliminada }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------- Categorías ----------------
+  /categories:
+    get:
+      summary: Listar categorías (sistema + usuario)
+      responses:
+        "200":
+          description: Lista
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Category" } }
+    post:
+      summary: Crear categoría propia del usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, kind]
+              properties:
+                name: { type: string }
+                kind: { type: string, enum: [expense, income, both] }
+                color: { type: string, nullable: true }
+      responses:
+        "201":
+          description: Creada
+          content: { application/json: { schema: { $ref: "#/components/schemas/Category" } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /categories/{id}:
+    delete:
+      summary: Borrar categoría propia (sus transacciones pasan a "Sin categorizar")
+      parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
+      responses:
+        "204": { description: Borrada }
+        "403": { description: No se puede borrar una categoría del sistema, $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------- Presupuestos ----------------
+  /budgets:
+    get:
+      summary: Presupuestos de un mes con su progreso calculado
+      parameters:
+        - { in: query, name: year_month, required: true, schema: { type: string, example: "2026-07" } }
+      responses:
+        "200":
+          description: Presupuestos con derivados (spent, percent, status)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/BudgetProgress" } }
+    post:
+      summary: Crear/definir presupuesto mensual por categoría
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id, year_month, limit_minor, currency]
+              properties:
+                category_id: { type: integer }
+                year_month: { type: string, example: "2026-07" }
+                limit_minor: { type: integer, minimum: 1 }
+                currency: { type: string, example: "COP" }
+      responses:
+        "201":
+          description: Creado
+          content: { application/json: { schema: { $ref: "#/components/schemas/BudgetProgress" } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /budgets/{id}:
+    delete:
+      summary: Eliminar presupuesto
+      parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
+      responses:
+        "204": { description: Eliminado }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------- Metas de ahorro ----------------
+  /goals:
+    get:
+      summary: Listar metas con progreso (suma de aportes)
+      responses:
+        "200":
+          description: Metas con derivados
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/GoalProgress" } }
+    post:
+      summary: Crear meta de ahorro
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, target_minor, currency]
+              properties:
+                name: { type: string }
+                target_minor: { type: integer, minimum: 1 }
+                currency: { type: string }
+                target_date: { type: string, nullable: true, example: "2026-12-31" }
+      responses:
+        "201":
+          description: Creada
+          content: { application/json: { schema: { $ref: "#/components/schemas/GoalProgress" } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /goals/{id}/contributions:
+    post:
+      summary: Registrar aporte manual a una meta
+      parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount_minor, date]
+              properties:
+                amount_minor: { type: integer, minimum: 1 }
+                date: { type: string, example: "2026-07-05" }
+                note: { type: string, nullable: true }
+      responses:
+        "201":
+          description: Aporte registrado; devuelve la meta con progreso actualizado
+          content: { application/json: { schema: { $ref: "#/components/schemas/GoalProgress" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  # ---------------- Reportes (dashboard) ----------------
+  /reports/by-category:
+    get:
+      summary: Gasto por categoría de un periodo (con trazabilidad)
+      parameters:
+        - { in: query, name: year_month, required: true, schema: { type: string, example: "2026-07" } }
+      responses:
+        "200":
+          description: >
+            Desglose por categoría. `total_minor` de la suma de items DEBE igualar el total de gastos
+            del periodo (FR-013/SC-002).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryReport" }
+  /reports/monthly:
+    get:
+      summary: Evolución mensual ingresos vs gastos + saldo neto y tendencias
+      parameters:
+        - { in: query, name: months, schema: { type: integer, default: 6 } }
+      responses:
+        "200":
+          description: Serie mensual
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MonthlyPoint" }
+
+  # ---------------- Importación ----------------
+  /import/preview:
+    post:
+      summary: Analizar CSV/Excel (propone mapeo, marca inválidas y duplicados) — sin insertar
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Vista previa de importación
+          content: { application/json: { schema: { $ref: "#/components/schemas/ImportPreview" } } }
+        "415": { description: Formato no soportado/corrupto, $ref: "#/components/responses/Unsupported" }
+  /import/commit:
+    post:
+      summary: Confirmar e insertar las filas válidas seleccionadas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportCommit" }
+      responses:
+        "200":
+          description: Resultado de la importación (creadas / omitidas)
+          content: { application/json: { schema: { $ref: "#/components/schemas/ImportResult" } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  # ---------------- Chat IA ----------------
+  /chat:
+    post:
+      summary: Preguntar en lenguaje natural sobre las finanzas (cifras calculadas + citas)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string, example: "¿cuánto gasté en comida este mes?" }
+      responses:
+        "200":
+          description: >
+            Respuesta redactada. Las cifras provienen de cálculo determinista y coinciden con los
+            reportes (FR-019). `degraded=true` si la IA no estaba disponible.
+          content: { application/json: { schema: { $ref: "#/components/schemas/ChatAnswer" } } }
+
+  # ---------------- Admin / demo ----------------
+  /admin/reset:
+    post:
+      summary: "Empezar de cero" — borra todos los datos del usuario (requiere confirmación en cliente)
+      responses:
+        "200": { description: Datos borrados }
+  /admin/reseed:
+    post:
+      summary: "Recargar datos de ejemplo" — regenera ~3 meses de datos ficticios
+      responses:
+        "200": { description: Datos de ejemplo recargados }
+  /health:
+    get:
+      summary: Estado del backend y disponibilidad de IA (sin exponer la clave)
+      responses:
+        "200":
+          description: Estado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  ai_available: { type: boolean }
+
+components:
+  schemas:
+    Money:
+      type: object
+      description: Convención de dinero (no es un objeto real; documenta los pares *_minor + currency)
+      properties:
+        amount_minor: { type: integer, description: Monto en unidades menores (céntimos) }
+        currency: { type: string, example: "COP" }
+
+    Category:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        kind: { type: string, enum: [expense, income, both] }
+        is_system: { type: boolean }
+        color: { type: string, nullable: true }
+
+    Transaction:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [income, expense] }
+        amount_minor: { type: integer }
+        currency: { type: string }
+        date: { type: string, example: "2026-07-03" }
+        description: { type: string, nullable: true }
+        category_id: { type: integer, nullable: true }
+        category_status: { type: string, enum: [ai_suggested, user_confirmed, uncategorized] }
+        ai_confidence: { type: number, nullable: true, minimum: 0, maximum: 1 }
+        source: { type: string, enum: [manual, imported] }
+
+    TransactionCreate:
+      type: object
+      required: [type, amount_minor, currency, date]
+      properties:
+        type: { type: string, enum: [income, expense] }
+        amount_minor: { type: integer, minimum: 1 }
+        currency: { type: string }
+        date: { type: string }
+        description: { type: string, nullable: true }
+        category_id: { type: integer, nullable: true, description: Si se omite, la IA sugiere }
+
+    TransactionUpdate:
+      type: object
+      description: Campos parciales; enviar category_id marca la categoría como user_confirmed
+      properties:
+        type: { type: string, enum: [income, expense] }
+        amount_minor: { type: integer, minimum: 1 }
+        date: { type: string }
+        description: { type: string, nullable: true }
+        category_id: { type: integer, nullable: true }
+
+    BudgetProgress:
+      type: object
+      properties:
+        id: { type: integer }
+        category_id: { type: integer }
+        category_name: { type: string }
+        year_month: { type: string }
+        limit_minor: { type: integer }
+        spent_minor: { type: integer }
+        percent: { type: number, description: 0..1+ (calculado en backend) }
+        over_by_minor: { type: integer }
+        status: { type: string, enum: [ok, near, exceeded] }
+        currency: { type: string }
+
+    GoalProgress:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        target_minor: { type: integer }
+        saved_minor: { type: integer }
+        percent: { type: number }
+        status: { type: string, enum: [in_progress, reached, overdue] }
+        target_date: { type: string, nullable: true }
+        currency: { type: string }
+
+    CategoryReport:
+      type: object
+      properties:
+        year_month: { type: string }
+        currency: { type: string }
+        total_minor: { type: integer, description: Total de gastos del periodo (== suma de items) }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              category_id: { type: integer, nullable: true }
+              category_name: { type: string, example: "Comida | Sin categorizar" }
+              amount_minor: { type: integer }
+              transaction_ids:
+                type: array
+                items: { type: integer }
+                description: Trazabilidad — transacciones que componen la cifra (FR-016)
+
+    MonthlyPoint:
+      type: object
+      properties:
+        year_month: { type: string }
+        income_minor: { type: integer }
+        expense_minor: { type: integer }
+        net_minor: { type: integer }
+        currency: { type: string }
+
+    ImportPreview:
+      type: object
+      properties:
+        columns: { type: array, items: { type: string } }
+        proposed_mapping:
+          type: object
+          properties:
+            date: { type: string, nullable: true }
+            description: { type: string, nullable: true }
+            amount: { type: string, nullable: true }
+        valid_rows:
+          type: array
+          items: { $ref: "#/components/schemas/TransactionCreate" }
+        invalid_rows:
+          type: array
+          items:
+            type: object
+            properties:
+              row_index: { type: integer }
+              reason: { type: string }
+        possible_duplicates:
+          type: array
+          items:
+            type: object
+            properties:
+              row_index: { type: integer }
+              existing_transaction_id: { type: integer }
+
+    ImportCommit:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/TransactionCreate" }
+        skip_duplicates: { type: boolean, default: true }
+
+    ImportResult:
+      type: object
+      properties:
+        created_count: { type: integer }
+        skipped_count: { type: integer }
+        skipped:
+          type: array
+          items:
+            type: object
+            properties:
+              row_index: { type: integer }
+              reason: { type: string }
+
+    ChatAnswer:
+      type: object
+      properties:
+        answer: { type: string }
+        degraded: { type: boolean, description: true si la IA no estaba disponible }
+        citations:
+          type: array
+          description: Fuentes de cada cifra (FR-020)
+          items:
+            type: object
+            properties:
+              label: { type: string, example: "Gasto en Comida, 2026-07" }
+              amount_minor: { type: integer, nullable: true }
+              period: { type: string, nullable: true }
+              category_id: { type: integer, nullable: true }
+              transaction_ids: { type: array, items: { type: integer } }
+        needs_input:
+          type: string
+          nullable: true
+          description: Si falta un dato, qué se le pide al usuario (FR-021)
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string, description: Sin montos ni descripciones sensibles }
+            details:
+              type: array
+              items: { type: string }
+
+  responses:
+    ValidationError:
+      description: Datos inválidos
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    NotFound:
+      description: Recurso no encontrado
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Conflict:
+      description: Conflicto (p. ej. duplicado único)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Forbidden:
+      description: Operación no permitida
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Unsupported:
+      description: Formato de archivo no soportado o corrupto
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
