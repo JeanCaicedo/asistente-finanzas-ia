@@ -1,63 +1,114 @@
-# Asistente de Finanzas IA
+# Asistente de Finanzas IA (Demo)
 
-Agente de IA que responde preguntas en lenguaje natural sobre finanzas personales: consulta de gastos, categorización automática y comparativas entre periodos, con soporte planificado para extracción de datos desde imágenes de recibos.
+Demo de finanzas personales de un solo usuario (sin login) con datos de ejemplo
+precargados (~3 meses). **Backend Python/FastAPI + SQLite** concentra TODA la lógica de
+cálculo financiero (totales, presupuestos, metas) de forma determinista y con tests en
+pytest; la IA (**Google Gemini**, clave por entorno) solo sugiere categorías y redacta las
+respuestas del chat — **nunca calcula cifras**. Frontend en **React + Vite + TypeScript**
+con Recharts. Degradación controlada si Gemini falla o no hay clave.
 
-## Descripción
+Especificación completa en [`specs/001-finance-assistant/`](specs/001-finance-assistant/)
+(spec, plan, contratos OpenAPI, data-model, quickstart).
 
-Proyecto orientado a la implementación de agentes de IA basados en LLMs, integrando técnicas de function-calling / tool-use y RAG (Retrieval-Augmented Generation) para conectar un modelo de lenguaje con datos financieros reales.
+## Características
 
-## Estado del proyecto
+- Registro, listado, edición y borrado de transacciones con datos de ejemplo precargados.
+- Categorización automática con IA (con confianza) y **fallback determinista por palabras
+  clave**; la corrección del usuario siempre prevalece.
+- Dashboard con gasto por categoría, ingresos vs gastos y tendencia del neto; cada cifra
+  es **trazable** (drill-down a las transacciones que la componen) y la suma por categoría
+  cuadra con el total.
+- Presupuestos mensuales con alertas (cerca del 80% / excedido) y metas de ahorro con
+  aportes manuales.
+- Chat en lenguaje natural cuyas cifras coinciden exactamente con el dashboard y citan sus
+  fuentes; degradación explícita si no hay IA.
+- Importación CSV/Excel con mapeo de columnas, validación fila a fila y aviso de duplicados.
+- Precisión exacta de dinero: montos como **enteros en unidades menores (céntimos)**, nunca
+  `float`. El frontend nunca hace aritmética; solo formatea.
 
-En desarrollo — Fase 2: categorización automática de transacciones con salida JSON estructurada y validada (`structured outputs`), reutilizable desde una futura API.
+## Requisitos
 
-## Roadmap
+- Python 3.11+ (probado con 3.14)
+- Node.js 18+
+- (Opcional) Clave gratis de Gemini: https://aistudio.google.com/apikey — sin ella la app
+  funciona igual (categorización por fallback y chat en modo degradado).
 
-- [x] Integración básica con la API (system prompt, mensajes, tokens)
-- [x] Prompting estructurado con salida en formato JSON (categorización de transacciones)
-- [ ] Function calling: consultas a una base de datos de gastos
-- [ ] RAG con `pgvector` para consultas sobre historial extenso
-- [ ] Arquitectura de agente con ciclo de tool-use
-- [ ] Lectura de recibos por visión (imagen → JSON, sin OCR aparte)
-- [ ] Consideraciones de seguridad y control de costos en producción
+## Arranque (dos comandos)
 
-## Stack tecnológico
-
-- Node.js
-- Adaptador de proveedor LLM (`src/llm.js`): funciona con **Gemini** (gratis) o **Claude/Anthropic**, intercambiables vía `.env`
-- SDKs: `@google/genai`, `@anthropic-ai/sdk`
-- Planificado: Express/NestJS, PostgreSQL + `pgvector`
-
-## Instalación
+### 1) Backend
 
 ```bash
+cd backend
+python -m venv .venv
+# Windows: .venv\Scripts\activate  |  macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env        # opcional: pon GEMINI_API_KEY
+uvicorn app.main:app --reload --port 8000
+```
+
+Al primer arranque la BD (`backend/data/finanzas.db`) se crea y **se siembra
+automáticamente** con ~3 meses de datos de ejemplo.
+
+### 2) Frontend (otra terminal)
+
+```bash
+cd frontend
 npm install
-cp .env.example .env
+cp .env.example .env        # VITE_API_BASE_URL=http://localhost:8000
+npm run dev
 ```
 
-Elige tu proveedor en `.env` con `LLM_PROVIDER`:
+Abre el frontend (Vite suele servir en http://localhost:5173).
 
-- **Gemini (gratis, sin tarjeta)** — `LLM_PROVIDER=gemini` y pon tu `GEMINI_API_KEY` de [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
-- **Claude/Anthropic (pago por uso)** — `LLM_PROVIDER=claude` y pon tu `ANTHROPIC_API_KEY` de [console.anthropic.com](https://console.anthropic.com).
+## Variables de entorno
 
-Cambiar de un proveedor a otro es solo cambiar esas variables; la lógica del proyecto no cambia.
+`backend/.env`:
 
-## Uso
+| Variable | Descripción | Por defecto |
+|----------|-------------|-------------|
+| `GEMINI_API_KEY` | Clave de Gemini (vacío ⇒ chat degradado + fallback de categorías) | — |
+| `GEMINI_MODEL` | Modelo de Gemini | `gemini-2.5-flash` |
+| `DEFAULT_CURRENCY` | Moneda única de la demo (ISO 4217) | `COP` |
+| `DB_PATH` | Ruta del archivo SQLite | `backend/data/finanzas.db` |
 
-Llamada básica al modelo (Fase 1):
+`frontend/.env`: `VITE_API_BASE_URL` (URL del backend).
+
+## Pruebas
 
 ```bash
-npm start
-npm start -- "¿Cuánto gasté en enero?"
+cd backend && pytest -q
 ```
 
-Categorización de una transacción a JSON estructurado (Fase 2):
+Cubre utilidades de dinero, cálculos financieros (totales, presupuestos, metas), reportes,
+fallback de categorización, importación, chat y privacidad de logs.
+
+## Sembrar / reiniciar datos
 
 ```bash
-npm run categorizar
-npm run categorizar -- "Pago Rappi restaurante $45.000 el 3 de marzo con tarjeta"
+cd backend && python -m scripts.seed          # siembra datos de ejemplo
+cd backend && python -m scripts.seed --reset  # borra datos de usuario y re-siembra
 ```
 
-Devuelve un objeto validado con `comercio`, `monto`, `moneda`, `tipo`,
-`categoria`, `subcategoria`, `fecha`, `confianza` y `nota`. La función
-`categorizarTransaccion()` en `src/categorizar.js` es reutilizable desde
-código (será la base del function-calling de la Fase 3).
+Desde la UI: **"Recargar datos de ejemplo"** y **"Empezar de cero"** (en Transacciones).
+
+## Arquitectura
+
+```
+backend/app/
+  money.py, config.py, db.py, schemas.py, errors.py, logging_util.py
+  repositories/   # acceso a datos (SQL explícito, sin ORM)
+  services/       # finance.py (CÁLCULOS puros y testeados), reports, categorize, chat, importer, seed
+  llm/gemini.py   # adaptador de IA (degrada sin lanzar)
+  routers/        # endpoints FastAPI
+frontend/src/
+  api/client.ts, lib/format.ts (solo presentación), types.ts
+  pages/          # Dashboard, Transactions, Budgets, ImportPage, Chat
+```
+
+Separación deliberada de cálculo (`services/finance.py`), acceso a datos (`repositories/`)
+e IA (`llm/gemini.py`) para cumplir precisión y testabilidad.
+
+## Prototipo previo (Node.js)
+
+El directorio `src/` conserva el prototipo Node original (adaptador `llm.js` y
+`categorizar.js`) como referencia histórica; no se extiende. El backend activo es Python.
